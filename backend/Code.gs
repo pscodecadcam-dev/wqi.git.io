@@ -62,3 +62,37 @@ function doOptions(e) {
     .setMimeType(ContentService.MimeType.TEXT)
     .setHeaders(headers);
 }
+
+// สำหรับรับข้อมูลเมื่อเว็บไซต์ใช้คำสั่ง fetch(GET) เพื่อดึงข้อมูลไปโชว์
+function doGet(e) {
+  try {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    const data = sheet.getDataRange().getValues();
+    
+    // หากไม่มีข้อมูล (มีแค่หัวตาราง หรือว่างเปล่า)
+    if (data.length <= 1) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", data: [] }))
+                           .setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    // แถวแรกคือชื่อคอลัมน์
+    const headers = data[0];
+    const rows = data.slice(1);
+    
+    // แปลง array 2 มิติ ให้เป็น array ของ object
+    const jsonData = rows.map(row => {
+      let obj = {};
+      headers.forEach((header, index) => {
+        obj[header] = row[index];
+      });
+      return obj;
+    });
+    
+    return ContentService.createTextOutput(JSON.stringify({ status: "success", data: jsonData }))
+                         .setMimeType(ContentService.MimeType.JSON);
+                         
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: error.toString() }))
+                         .setMimeType(ContentService.MimeType.JSON);
+  }
+}

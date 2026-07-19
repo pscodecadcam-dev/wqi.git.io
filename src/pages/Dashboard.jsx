@@ -1,26 +1,57 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
-import { Filter } from 'lucide-react';
-
-// Mock Data
-const mockData = [
-  { id: 'INS-A1B2', date: '2026-07-15T10:00', wqi: 75, do: 6.5, ph: 7.2, ec: 300, temp: 28 },
-  { id: 'INS-C3D4', date: '2026-07-16T11:30', wqi: 82, do: 7.1, ph: 7.0, ec: 250, temp: 27 },
-  { id: 'INS-E5F6', date: '2026-07-17T09:15', wqi: 55, do: 4.5, ph: 6.5, ec: 600, temp: 30 },
-  { id: 'INS-G7H8', date: '2026-07-18T14:20', wqi: 95, do: 8.2, ph: 7.1, ec: 150, temp: 26 },
-];
+import { Filter, RefreshCw } from 'lucide-react';
 
 const Dashboard = () => {
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [activeTab, setActiveTab] = useState('WQI');
 
+  useEffect(() => {
+    const fetchData = async () => {
+      const scriptUrl = import.meta.env.VITE_GOOGLE_SCRIPT_URL;
+      if (!scriptUrl) {
+        setLoading(false);
+        setError('ไม่พบ URL ของฐานข้อมูล กรุณาตั้งค่า VITE_GOOGLE_SCRIPT_URL');
+        return;
+      }
+      try {
+        const response = await fetch(scriptUrl);
+        const result = await response.json();
+        if (result.status === 'success') {
+          // แปลงคีย์ให้เป็นตัวเล็กสำหรับใช้งานใน recharts
+          const formattedData = result.data.map(item => ({
+            id: item.InsID || '',
+            date: item.DateIns || '',
+            wqi: Number(item.WQI) || 0,
+            do: Number(item.DO) || 0,
+            ph: Number(item.pH) || 0,
+            ec: Number(item.EC) || 0,
+            temp: Number(item.Temp) || 0,
+          }));
+          setData(formattedData);
+        } else {
+          setError(result.message || 'เกิดข้อผิดพลาดในการดึงข้อมูล');
+        }
+      } catch (err) {
+        setError('เกิดข้อผิดพลาดในการเชื่อมต่อ (CORS หรือ URL ผิด)');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
   // Simple filter logic
-  const filteredData = mockData.filter(d => {
+  const filteredData = data.filter(d => {
     if (!startDate && !endDate) return true;
-    const date = new Date(d.date);
-    if (startDate && new Date(startDate) > date) return false;
-    if (endDate && new Date(endDate) < date) return false;
+    const dateObj = new Date(d.date);
+    if (startDate && new Date(startDate) > dateObj) return false;
+    if (endDate && new Date(endDate) < dateObj) return false;
     return true;
   });
 
@@ -39,11 +70,26 @@ const Dashboard = () => {
     <div className="page-container" style={{ paddingBottom: '2rem' }}>
       <h1>ภาพรวมข้อมูล (Dashboard)</h1>
 
-      <div className="card">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-          <Filter size={20} color="var(--color-text-muted)" />
-          <h2 style={{ margin: 0 }}>กรองข้อมูล</h2>
+      {loading && (
+        <div className="card" style={{ textAlign: 'center', padding: '2rem' }}>
+          <RefreshCw className="spinner" size={32} color="var(--color-primary)" style={{ margin: '0 auto 1rem' }} />
+          <p>กำลังดึงข้อมูลจากฐานข้อมูล...</p>
         </div>
+      )}
+
+      {error && !loading && (
+        <div className="card" style={{ borderLeft: '4px solid var(--wqi-very-poor)' }}>
+          <p style={{ color: 'var(--wqi-very-poor)', fontWeight: 'bold' }}>{error}</p>
+        </div>
+      )}
+
+      {!loading && !error && (
+        <>
+          <div className="card">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+              <Filter size={20} color="var(--color-text-muted)" />
+              <h2 style={{ margin: 0 }}>กรองข้อมูล</h2>
+            </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">เริ่มต้น</label>
@@ -129,6 +175,8 @@ const Dashboard = () => {
           </table>
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 };
